@@ -554,14 +554,17 @@ async def autoconnect_to_smsensor():
 
 async def record_sample(sample_type, device_id, client):
     """Record a sample from the Bluetooth device and save to log file."""
+    print(f"Starting sample recording: {sample_type} for device: {device_id}")
     recorded_data = []
     data_received = False
     
     def notification_handler(characteristic: BleakGATTCharacteristic, data: bytearray):
         """Handle incoming Bluetooth notifications and collect data."""
+        nonlocal data_received
         timestamp = time.time()
         hex_data = ":".join(hex(b)[2:].upper().zfill(2) for b in data)
         recorded_data.append(f"[{hex_data}]")
+        data_received = True
         print(f"Received: {hex_data}")
     
     try:
@@ -598,11 +601,14 @@ async def record_sample(sample_type, device_id, client):
         while elapsed < recording_duration:
             await asyncio.sleep(check_interval)
             elapsed += check_interval
-            
-            if data_received and len(recorded_data) > 0:
-                if elapsed % 1 == 0:
+
+            # Show progress every second
+            if elapsed % 1 == 0:
+                if data_received and len(recorded_data) > 0:
                     print(f"Recording progress: {len(recorded_data)} samples after {elapsed}s")
-            
+                else:
+                    print(f"Recording time: {elapsed}s - waiting for data...")
+
             if not client.is_connected:
                 print("Device disconnected during recording")
                 break
@@ -612,27 +618,42 @@ async def record_sample(sample_type, device_id, client):
         await asyncio.sleep(0.5)
         
         print(f"Recording complete: {len(recorded_data)} samples collected")
-        
+
+        if len(recorded_data) == 0:
+            print("⚠️ Warning: No data received during recording - check device connection")
+            return {'error': 'No data received from device'}
+
         # Save data to log file - match the path from calibration_check.py
         logs_dir = Path.home() / "Documents" / "Spirometer Calibration Logs"
+        print(f"Creating log directory: {logs_dir}")
         logs_dir.mkdir(parents=True, exist_ok=True)
-        
+
         timestamp = int(time.time())
         log_filename = f"{device_id}_{sample_type}_{timestamp}.log"
         log_filepath = logs_dir / log_filename
-        
+
+        print(f"Attempting to save log file: {log_filepath}")
         try:
             with open(log_filepath, 'w') as f:
                 for line in recorded_data:
                     f.write(f"{line}\n")
             print(f"✅ File saved successfully: {log_filepath}")
+            print(f"✅ File exists: {log_filepath.exists()}")
+            print(f"✅ File size: {log_filepath.stat().st_size} bytes")
         except Exception as e:
-            print(f"❌ Failed to save file: {e}")
+            print(f"❌ Failed to save file to {log_filepath}: {e}")
+            # Try fallback to current directory
             log_filepath = Path(f"{device_id}_{sample_type}_{timestamp}.log")
-            with open(log_filepath, 'w') as f:
-                for line in recorded_data:
-                    f.write(f"{line}\n")
-            print(f"✅ File saved to fallback location: {log_filepath.absolute()}")
+            print(f"Trying fallback location: {log_filepath.absolute()}")
+            try:
+                with open(log_filepath, 'w') as f:
+                    for line in recorded_data:
+                        f.write(f"{line}\n")
+                print(f"✅ File saved to fallback location: {log_filepath.absolute()}")
+                print(f"✅ Fallback file size: {log_filepath.stat().st_size} bytes")
+            except Exception as fallback_e:
+                print(f"❌ Fallback save also failed: {fallback_e}")
+                return {'error': f'File saving failed: {str(e)}, fallback: {str(fallback_e)}'}
         
         # Parse the recorded data to extract pressures
         pressures_pa = []
