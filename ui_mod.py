@@ -623,8 +623,8 @@ async def record_sample(sample_type, device_id, client):
             print("⚠️ Warning: No data received during recording - check device connection")
             return {'error': 'No data received from device'}
 
-        # Save data to log file - match the path from calibration_check.py
-        logs_dir = Path.home() / "Documents" / "Spirometer Calibration Logs"
+        # Save data to log file in app directory
+        logs_dir = Path(__file__).parent / "logs"
         print(f"Creating log directory: {logs_dir}")
         logs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1097,7 +1097,7 @@ def update_coefficients_conditionally(new_coeffs=None):
 
 def check_calibration(samples, device_id):
     """Run calibration analysis using active coefficients"""
-    log_folder = Path.home() / "Documents" / "Spirometer Calibration Logs"
+    log_folder = Path(__file__).parent / "logs"
     if not os.path.exists(log_folder):
         st.error(f"Log folder does not exist: {log_folder}")
         return False, None, None
@@ -1258,7 +1258,7 @@ if len(st.session_state.samples) == 6:
                 if st.button("🤖 Auto-Recalibrate", type="primary"):
                     try:
                         with st.spinner("Recalibrating coefficients..."):
-                            logs_dir = Path.home() / "Documents" / "Spirometer Calibration Logs"
+                            logs_dir = Path(__file__).parent / "logs"
                             device_id = st.session_state.get('device_id', 'unknown_device')
                             
                             # Generate new coefficients
@@ -1584,7 +1584,7 @@ if devices:
 if st.session_state.get('device_id') and st.session_state.get('samples'):
     if st.button("🔧 Manual Recalibration"):
         try:
-            logs_dir = Path.home() / "Documents" / "Spirometer Calibration Logs"
+            logs_dir = Path(__file__).parent / "logs"
             new_coeffs = generate_coefficients(str(logs_dir))
             # Ensure device exists before updating
             if not get_device(st.session_state['device_id']):
@@ -1598,7 +1598,7 @@ if st.session_state.get('device_id') and st.session_state.get('samples'):
 def test_file_saving():
     """Test if file saving works in the expected directory"""
     try:
-        logs_dir = Path.home() / "Documents" / "Spirometer Calibration Logs"
+        logs_dir = Path(__file__).parent / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         
         test_file = logs_dir / "test_save.log"
