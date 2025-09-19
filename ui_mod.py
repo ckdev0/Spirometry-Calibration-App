@@ -432,7 +432,8 @@ async def scan_and_connect_smsensor():
         # Look for SMSensor device
         target_device = None
         for device in devices:
-            if device.name and ("SMSensor" in device.name()):
+            print(f"Found device: {device.name} - {device.address}")
+            if device.name and ("SMSensor" in device.name):
                 target_device = device
                 break
         
@@ -514,6 +515,23 @@ async def autoconnect_to_smsensor():
         print("check", client)
         
         if client and client.is_connected:
+            # Force service discovery to ensure characteristics are available
+            try:
+                services = await client.get_services()
+                print(f"Services discovered: {len(services)} services")
+                # Verify our characteristic exists
+                char_found = False
+                for service in services:
+                    for char in service.characteristics:
+                        if str(char.uuid) == char_uuid:
+                            char_found = True
+                            print(f"Verified characteristic {char_uuid} available")
+                            break
+                if not char_found:
+                    print(f"Warning: Characteristic {char_uuid} not found after connection")
+            except Exception as e:
+                print(f"Service discovery warning: {e}")
+            
             st.session_state.btclient = client
             st.session_state.ble_client = client
             st.session_state.connected_device = f"{smsensor_device.name} - {smsensor_device.address}"
@@ -550,6 +568,24 @@ async def record_sample(sample_type, device_id, client):
         # Wait before starting
         await asyncio.sleep(1)
         
+        # Ensure services are discovered and available
+        services = await client.get_services()
+        print(f"Available services: {[str(s.uuid) for s in services]}")
+        
+        # Find the characteristic in available services
+        char_found = False
+        for service in services:
+            for char in service.characteristics:
+                if str(char.uuid) == char_uuid:
+                    char_found = True
+                    print(f"Found characteristic {char_uuid} in service {service.uuid}")
+                    break
+            if char_found:
+                break
+        
+        if not char_found:
+            raise RuntimeError(f"Characteristic {char_uuid} not found in any service")
+        
         # Start notifications
         await client.start_notify(char_uuid, notification_handler)
         print("Notifications started - recording...")
@@ -577,8 +613,8 @@ async def record_sample(sample_type, device_id, client):
         
         print(f"Recording complete: {len(recorded_data)} samples collected")
         
-        # Save data to log file
-        logs_dir = Path.home() / "Documents" / "Spirometer Calibration" / "Logs"
+        # Save data to log file - match the path from calibration_check.py
+        logs_dir = Path.home() / "Documents" / "Spirometer Calibration Logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         
         timestamp = int(time.time())
@@ -765,32 +801,55 @@ with c4:
             st.rerun()
 
 
-# Auto-connect logic on first app load
-if not st.session_state.auto_connect_attempted:
-    st.session_state.auto_connect_attempted = True
-    if st.session_state.btclient is None:
-        with st.spinner("🔍 Auto-scanning for SMSensor device..."):
-            try:
-                client = run_asynccoro(autoconnect_to_smsensor())
-                if client:
-                    st.session_state.btclient = client
-                    st.success("✅ Automatically connected to SMSensor!")
-                    st.snow()
-                else:
-                    st.warning("⚠️ SMSensor not found. Please use manual scan below.")
-            except Exception as e:
-                st.warning(f"Auto-connect failed. Please use manual scan below.")
-
-# OLD UI - Keep for manual connection if needed
-if st.session_state.btclient is None or not st.session_state.btclient.is_connected:
+# Auto-connect logic - only run in Streamlit context
+def perform_auto_connect():
+    """Perform auto-connect only when Streamlit is properly initialized"""
     try:
-        with st.spinner("🔍 Looking for SMSensor..."):
-            client = run_asynccoro(autoconnect_to_smsensor())
-            if client:
-                st.session_state.btclient = client
-                st.success("✅ SMSensor connected automatically!")
+        # Check if we're in a proper Streamlit context and runtime is active
+        if hasattr(st, 'session_state') and hasattr(st.runtime, 'get_instance') and st.runtime.get_instance() is not None:
+            if not st.session_state.auto_connect_attempted:
+                st.session_state.auto_connect_attempted = True
+                if st.session_state.btclient is None:
+                    with st.spinner("🔍 Auto-scanning for SMSensor device..."):
+                        try:
+                            client = run_asynccoro(autoconnect_to_smsensor())
+                            if client:
+                                st.session_state.btclient = client
+                                st.success("✅ Automatically connected to SMSensor!")
+                                st.snow()
+                            else:
+                                st.warning("⚠️ SMSensor not found. Please use manual scan below.")
+                        except Exception as e:
+                            st.warning(f"Auto-connect failed. Please use manual scan below.")
+
+            # Fallback auto-connect for disconnected devices
+            if st.session_state.btclient is None or not st.session_state.btclient.is_connected:
+                try:
+                    with st.spinner("🔍 Looking for SMSensor..."):
+                        client = run_asynccoro(autoconnect_to_smsensor())
+                        if client:
+                            st.session_state.btclient = client
+                            st.success("✅ SMSensor connected automatically!")
+                except Exception as e:
+                    st.info("ℹ️ SMSensor not found. Manual connection available below.")
     except Exception as e:
-        st.info("ℹ️ SMSensor not found. Manual connection available below.")
+        # Silently ignore if not in Streamlit context
+        pass
+
+# Only perform auto-connect if in proper Streamlit context
+def safe_auto_connect():
+    """Safely attempt auto-connect only when Streamlit runtime is available"""
+    try:
+        # Check if Streamlit runtime is active
+        from streamlit.runtime import get_instance
+        if get_instance() is not None:
+            perform_auto_connect()
+    except:
+        # Skip auto-connect if Streamlit runtime isn't available
+        pass
+
+# Call safe auto-connect
+safe_auto_connect()
 
 # Show connection status
 if st.session_state.btclient and st.session_state.btclient.is_connected:
@@ -844,6 +903,15 @@ if st.session_state.bluetooth_devices:
         try:
             with st.spinner("Connecting..."):
                 client = run_async(connect_device(selected_address))
+                
+                # Ensure services are discovered after manual connection
+                if client and client.is_connected:
+                    try:
+                        services = run_async(client.get_services())
+                        print(f"Manual connection: {len(services)} services discovered")
+                    except Exception as e:
+                        print(f"Manual connection service discovery warning: {e}")
+                
                 st.session_state.btclient = client
                 st.session_state.ble_client = client
                 st.session_state.connected_device = selected_device
@@ -1495,7 +1563,7 @@ if devices:
 if st.session_state.get('device_id') and st.session_state.get('samples'):
     if st.button("🔧 Manual Recalibration"):
         try:
-            logs_dir = Path.home() / "Documents" / "Spirometer Calibration" / "Logs"
+            logs_dir = Path.home() / "Documents" / "Spirometer Calibration Logs"
             new_coeffs = generate_coefficients(str(logs_dir))
             # Ensure device exists before updating
             if not get_device(st.session_state['device_id']):
@@ -1509,7 +1577,7 @@ if st.session_state.get('device_id') and st.session_state.get('samples'):
 def test_file_saving():
     """Test if file saving works in the expected directory"""
     try:
-        logs_dir = Path.home() / "Documents" / "Spirometer Calibration" / "Logs"
+        logs_dir = Path.home() / "Documents" / "Spirometer Calibration Logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         
         test_file = logs_dir / "test_save.log"
