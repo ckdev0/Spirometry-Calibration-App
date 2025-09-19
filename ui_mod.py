@@ -110,24 +110,35 @@ if sys.platform.startswith('win'):
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     except Exception:
         pass
+    # Initialize a persistent loop once on startup (used by run_async wrappers)
+    if 'persistent_event_loop' not in st.session_state or st.session_state.persistent_event_loop is None:
+        st.session_state.persistent_event_loop = asyncio.new_event_loop()
 
 # Logo and header functions
 def get_base64_of_logo(logo_path):
     try:
         with open(logo_path, "rb") as f:
             data = f.read()
-        return base64.b64encode(data).decode()
+        mime = "image/jpeg" if str(logo_path).lower().endswith((".jpg", ".jpeg")) else "image/png"
+        return base64.b64encode(data).decode(), mime
     except FileNotFoundError:
-        return None
+        # Fallback: try loading from app directory
+        try:
+            fallback = Path(__file__).parent / "neurosynaptic-logo.jpg"
+            with open(fallback, "rb") as f:
+                data = f.read()
+            return base64.b64encode(data).decode(), "image/jpeg"
+        except Exception:
+            return None, None
 
 def create_header():
     try:
-        logo_base64 = get_base64_of_logo(r"d:\Users\Tejaswini\Desktop\neurosyn\calibration\Calibration app\neurosynaptic-logo.jpg")
+        logo_base64, logo_mime = get_base64_of_logo(r"d:\Users\Tejaswini\Desktop\neurosyn\calibration\Calibration app\neurosynaptic-logo.jpg")
         if logo_base64:
             st.markdown(f"""
             <div class="main-header">
                 <div class="logo-container">
-                    <img src="data:image/png;base64,{logo_base64}" width="60" height="60" alt="ReMeDi Logo">
+                    <img src="data:{logo_mime};base64,{logo_base64}" width="60" height="60" alt="ReMeDi Logo">
                 </div>
                 <h1 class="app-title">ReMeDi Nova Spirometer Calibration</h1>
             </div>
@@ -148,11 +159,11 @@ def create_header():
 # Complete CSS styling with all button styles
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
 
 /* Global font application */
 *, .stApp, .stApp * {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
+    font-family: 'DM Sans', sans-serif !important;
 }
 
 .stApp {
@@ -196,7 +207,7 @@ footer {visibility: hidden;}
 }
 
 .logo-container img {
-    filter: brightness(0) invert(1);
+    filter: none !important;
 }
 
 /* Bluetooth section */
@@ -400,7 +411,7 @@ def run_async(coro):
 # Bluetooth Functions - All consolidated to avoid duplicates
 async def scan_bluetooth():
     """Scan for available Bluetooth devices."""
-    devices = await BleakScanner.discover(timeout=6.0)
+    devices = await BleakScanner.discover(timeout=10.0)
     return devices
 
 async def connect_device(address, timeout: float = 10.0):
@@ -482,6 +493,7 @@ async def autoconnect_to_smsensor():
     try:
         print("Auto-scanning for SMSensor devices...")
         devices = await BleakScanner.discover(timeout=8.0)
+        print('devices', devices)
         
         smsensor_device = None
         for device in devices:
@@ -734,31 +746,23 @@ status_color = "connected" if st.session_state.device_connected else "disconnect
 #             st.rerun()
 #     st.markdown('</div>', unsafe_allow_html=True)
 
-# Center Connect/Disconnect button properly
-st.markdown(
-    """
-    <div style="display: flex; justify-content: center; margin: 20px;">
-        <div class="connect-container">
-    """,
-    unsafe_allow_html=True
-)
-
-if st.session_state.device_connected:
-    if st.button("Disconnect from Remedi", key="disconnect_btn"):
-        with st.spinner("Disconnecting..."):
-            run_async(disconnect_smsensor())
-        st.rerun()
-else:
-    if st.button("Connect to Remedi", key="connect_btn"):
-        with st.spinner("Connecting..."):
-            client = run_async(scan_and_connect_smsensor())
-            if client and st.session_state.device_connected:
-                monitor_thread = threading.Thread(target=monitor_smsensor_connection)
-                monitor_thread.daemon = True
-                monitor_thread.start()
-        st.rerun()
-
-st.markdown("</div></div>", unsafe_allow_html=True)
+# Center Connect/Disconnect button using 5 columns (middle column)
+c1, c2, c3, c4, c5 = st.columns([0.35,0.5,1,1.5,1])
+with c4:
+    if st.session_state.device_connected:
+        if st.button("Disconnect from Remedi Nova", key="disconnect_btn"):
+            with st.spinner("Disconnecting..."):
+                run_async(disconnect_smsensor())
+            st.rerun()
+    else:
+        if st.button("Connect to Remedi Nova", key="connect_btn"):
+            with st.spinner("Connecting..."):
+                client = run_async(scan_and_connect_smsensor())
+                if client and st.session_state.device_connected:
+                    monitor_thread = threading.Thread(target=monitor_smsensor_connection)
+                    monitor_thread.daemon = True
+                    monitor_thread.start()
+            st.rerun()
 
 
 # Auto-connect logic on first app load
@@ -1245,12 +1249,12 @@ def generate_device_report(device):
     y = height - margin
     
     # Title
-    c.setFont("'DM Sans'- sans-serif", 16)
+    #c.setFont("DM-Sans", 16)
     c.drawString(margin, y, f"Calibration Report - Device {device.device_id}")
     y -= 0.4 * inch
     
     # Device info
-    c.setFont("Helvetica", 12)
+    #c.setFont("DM-Sans", 12)
     c.drawString(margin, y, f"Device ID: {device.device_id}")
     y -= 0.3 * inch
     c.drawString(margin, y, f"Last Calibration: {device.date_of_calibration}")
@@ -1259,11 +1263,11 @@ def generate_device_report(device):
     y -= 0.4 * inch
     
     # Coefficients
-    c.setFont("Helvetica-Bold", 12)
+    #c.setFont("DM-Sans", 12)
     c.drawString(margin, y, "Current Coefficients:")
     y -= 0.3 * inch
     
-    c.setFont("Helvetica", 10)
+    #c.setFont("DM-Sans", 10)
     if device.coefficients:
         coeffs_text = ", ".join([f"{float(v):.8g}" for v in device.coefficients])
         max_chars = 80
@@ -1290,11 +1294,11 @@ def generate_all_devices_report(devices):
     y = height - margin
     
     # Title
-    c.setFont("Helvetica-Bold", 16)
+    #c.setFont("DM-Sans", 16)
     c.drawString(margin, y, "All Devices Calibration Report")
     y -= 0.4 * inch
     
-    c.setFont("Helvetica", 12)
+    #c.setFont("DM-Sans", 12)
     c.drawString(margin, y, f"Report Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
     c.drawString(margin, y - 0.2 * inch, f"Total Devices: {len(devices)}")
     y -= 0.6 * inch
@@ -1305,11 +1309,11 @@ def generate_all_devices_report(devices):
             c.showPage()
             y = height - margin
         
-        c.setFont("Helvetica-Bold", 12)
+        #c.setFont("DM-Sans", 12)
         c.drawString(margin, y, f"Device: {device.device_id}")
         y -= 0.3 * inch
         
-        c.setFont("Helvetica", 10)
+        #c.setFont("DM-Sans", 10)
         c.drawString(margin, y, f"Last Calibration: {device.date_of_calibration}")
         y -= 0.2 * inch
         
@@ -1621,8 +1625,8 @@ def run_connection_monitor():
         
         if st.session_state.monitoring_active:
             try:
-                # Use the correct function name from your file
-                run_asynccoro(monitor_connection_and_reconnect())
+                # Execute coroutine in a fresh event loop to avoid await issues
+                run_async(monitor_connection_and_reconnect())
             except Exception as e:
                 print(f"Connection monitoring error: {e}")
 
@@ -1726,7 +1730,4 @@ with st.sidebar:
 if st.session_state.btclient and st.session_state.btclient.is_connected:
     run_connection_monitor()
 
-# Auto-refresh for dynamic status updates - ONLY if connected
-if st.session_state.device_connected:
-    time.sleep(3)
-    st.rerun()
+# Auto-refresh disabled to prevent interrupting user inputs
