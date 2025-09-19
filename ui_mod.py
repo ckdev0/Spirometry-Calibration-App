@@ -555,6 +555,13 @@ async def autoconnect_to_smsensor():
 async def record_sample(sample_type, device_id, client):
     """Record a sample from the Bluetooth device and save to log file."""
     print(f"Starting sample recording: {sample_type} for device: {device_id}")
+
+    # Validate connection before starting
+    if not client or not client.is_connected:
+        print("❌ Client not connected - attempting reconnection")
+        return {'error': 'Device not connected'}
+
+    print(f"✅ Device connection confirmed for {sample_type} recording")
     recorded_data = []
     data_received = False
     
@@ -613,9 +620,13 @@ async def record_sample(sample_type, device_id, client):
                 print("Device disconnected during recording")
                 break
         
-        # Stop notifications properly
-        await client.stop_notify(char_uuid)
-        await asyncio.sleep(0.5)
+        # Stop notifications properly but keep connection alive
+        try:
+            await client.stop_notify(char_uuid)
+            await asyncio.sleep(0.5)
+            print("✅ Notifications stopped, connection kept alive")
+        except Exception as stop_error:
+            print(f"⚠️ Error stopping notifications: {stop_error}")
         
         print(f"Recording complete: {len(recorded_data)} samples collected")
 
@@ -695,8 +706,19 @@ async def record_sample(sample_type, device_id, client):
         print(f"Recording error: {str(e)}")
         try:
             await client.stop_notify(char_uuid)
+            print("🔧 Cleaned up notifications after error")
+        except Exception as cleanup_error:
+            print(f"⚠️ Cleanup error: {cleanup_error}")
+
+        # Check if connection is still alive
+        try:
+            if client.is_connected:
+                print("✅ Connection still alive after error")
+            else:
+                print("❌ Connection lost after error")
         except:
-            pass
+            print("❌ Cannot check connection status")
+
         return {'error': str(e)}
 
 def read_log_file(file_path):
