@@ -810,13 +810,13 @@ status_color = "connected" if st.session_state.device_connected else "disconnect
 #         st.markdown('<div class="disconnect-button">', unsafe_allow_html=True)
 #         if st.button("Disconnect from Remedi", key="disconnect_btn"):
 #             with st.spinner("Disconnecting..."):
-#                 run_async(disconnect_smsensor())
+#                 run_asynccoro(disconnect_smsensor())
 #             st.rerun()
 #     else:
 #         st.markdown('<div class="connect-button">', unsafe_allow_html=True)
 #         if st.button("Connect to Remedi", key="connect_btn"):
 #             with st.spinner("Connecting..."):
-#                 client = run_async(scan_and_connect_smsensor())
+#                 client = run_asynccoro(scan_and_connect_smsensor())
 #                 if client and st.session_state.device_connected:
 #                     # Start background monitoring
 #                     monitor_thread = threading.Thread(target=monitor_smsensor_connection)
@@ -831,12 +831,12 @@ with c4:
     if st.session_state.device_connected:
         if st.button("Disconnect from Remedi Nova", key="disconnect_btn"):
             with st.spinner("Disconnecting..."):
-                run_async(disconnect_smsensor())
+                run_asynccoro(disconnect_smsensor())
             st.rerun()
     else:
         if st.button("Connect to Remedi Nova", key="connect_btn"):
             with st.spinner("Connecting..."):
-                client = run_async(scan_and_connect_smsensor())
+                client = run_asynccoro(scan_and_connect_smsensor())
                 if client and st.session_state.device_connected:
                     monitor_thread = threading.Thread(target=monitor_smsensor_connection)
                     monitor_thread.daemon = True
@@ -910,7 +910,7 @@ st.subheader("📡 Manual Bluetooth Device Discovery")
 if st.button("🔍 Scan for Bluetooth Devices"):
     with st.spinner("Scanning for devices..."):
         try:
-            devices = run_async(scan_bluetooth())
+            devices = run_asynccoro(scan_bluetooth())
             st.session_state.bluetooth_devices = devices
             st.success(f"Found {len(devices)} devices")
         except Exception as e:
@@ -945,12 +945,12 @@ if st.session_state.bluetooth_devices:
     if st.button("Connect to Device"):
         try:
             with st.spinner("Connecting..."):
-                client = run_async(connect_device(selected_address))
+                client = run_asynccoro(connect_device(selected_address))
                 
                 # Ensure services are discovered after manual connection
                 if client and client.is_connected:
                     try:
-                        services = run_async(client.get_services())
+                        services = run_asynccoro(client.get_services())
                         print(f"Manual connection: {len(services)} services discovered")
                     except Exception as e:
                         print(f"Manual connection service discovery warning: {e}")
@@ -1025,7 +1025,7 @@ if pull_fast:
     if st.session_state.device_connected and st.session_state.ble_client:
         with st.spinner("Recording Pull fast sample..."):
             device_id = st.session_state.get('device_id', 'unknown_device')
-            st.session_state.samples['pull_fast'] = run_async(record_sample('pull_fast', device_id, st.session_state.ble_client))
+            st.session_state.samples['pull_fast'] = run_asynccoro(record_sample('pull_fast', device_id, st.session_state.ble_client))
         st.success("Pull fast sample recorded!")
     else:
         st.error("Please connect to SMSensor device first")
@@ -1034,7 +1034,7 @@ if push_fast:
     if st.session_state.device_connected and st.session_state.ble_client:
         with st.spinner("Recording Push fast sample..."):
             device_id = st.session_state.get('device_id', 'unknown_device')
-            st.session_state.samples['push_fast'] = run_async(record_sample('push_fast', device_id, st.session_state.ble_client))
+            st.session_state.samples['push_fast'] = run_asynccoro(record_sample('push_fast', device_id, st.session_state.ble_client))
         st.success("Push fast sample recorded!")
     else:
         st.error("Please connect to SMSensor device first")
@@ -1043,7 +1043,7 @@ if pull_mid:
     if st.session_state.device_connected and st.session_state.ble_client:
         with st.spinner("Recording Pull Mid sample..."):
             device_id = st.session_state.get('device_id', 'unknown_device')
-            st.session_state.samples['pull_mid'] = run_async(record_sample('pull_mid', device_id, st.session_state.ble_client))
+            st.session_state.samples['pull_mid'] = run_asynccoro(record_sample('pull_mid', device_id, st.session_state.ble_client))
         st.success("Pull Mid sample recorded!")
     else:
         st.error("Please connect to SMSensor device first")
@@ -1052,7 +1052,7 @@ if push_mid:
     if st.session_state.device_connected and st.session_state.ble_client:
         with st.spinner("Recording Push mid sample..."):
             device_id = st.session_state.get('device_id', 'unknown_device')
-            st.session_state.samples['push_mid'] = run_async(record_sample('push_mid', device_id, st.session_state.ble_client))
+            st.session_state.samples['push_mid'] = run_asynccoro(record_sample('push_mid', device_id, st.session_state.ble_client))
         st.success("Push mid sample recorded!")
     else:
         st.error("Please connect to SMSensor device first")
@@ -1061,7 +1061,7 @@ if pull_slow:
     if st.session_state.device_connected and st.session_state.ble_client:
         with st.spinner("Recording Pull slow sample..."):
             device_id = st.session_state.get('device_id', 'unknown_device')
-            st.session_state.samples['pull_slow'] = run_async(record_sample('pull_slow', device_id, st.session_state.ble_client))
+            st.session_state.samples['pull_slow'] = run_asynccoro(record_sample('pull_slow', device_id, st.session_state.ble_client))
         st.success("Pull slow sample recorded!")
     else:
         st.error("Please connect to SMSensor device first")
@@ -1070,7 +1070,7 @@ if push_slow:
     if st.session_state.device_connected and st.session_state.ble_client:
         with st.spinner("Recording Push slow sample..."):
             device_id = st.session_state.get('device_id', 'unknown_device')
-            st.session_state.samples['push_slow'] = run_async(record_sample('push_slow', device_id, st.session_state.ble_client))
+            st.session_state.samples['push_slow'] = run_asynccoro(record_sample('push_slow', device_id, st.session_state.ble_client))
         st.success("Push slow sample recorded!")
     else:
         st.error("Please connect to SMSensor device first")
@@ -1737,7 +1737,7 @@ def run_connection_monitor():
         if st.session_state.monitoring_active:
             try:
                 # Execute coroutine in a fresh event loop to avoid await issues
-                run_async(monitor_connection_and_reconnect())
+                run_asynccoro(monitor_connection_and_reconnect())
             except Exception as e:
                 print(f"Connection monitoring error: {e}")
 
@@ -1748,7 +1748,7 @@ if st.session_state.btclient is None or not st.session_state.btclient.is_connect
         st.session_state.auto_reconnect_attempted = True
         with st.spinner("🔄 Attempting to reconnect to previous device..."):
             try:
-                client = run_async(auto_reconnect_after_power_cycle())
+                client = run_asynccoro(auto_reconnect_after_power_cycle())
                 if client:
                     st.success("✅ Successfully reconnected!")
                     st.rerun()
@@ -1763,11 +1763,11 @@ if st.session_state.btclient is None or not st.session_state.btclient.is_connect
             with st.spinner("Reconnecting... Please ensure device is powered on."):
                 if st.session_state.btclient:
                     try:
-                        run_async(st.session_state.btclient.disconnect())
+                        run_asynccoro(st.session_state.btclient.disconnect())
                     except:
                         pass
                 
-                client = run_async(autoconnect_to_smsensor())
+                client = run_asynccoro(autoconnect_to_smsensor())
                 if client:
                     st.success("✅ Reconnected successfully!")
                     st.success(f"📊 All {len(st.session_state.samples)} previous samples preserved!")
